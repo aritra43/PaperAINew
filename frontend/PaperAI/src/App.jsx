@@ -207,6 +207,9 @@ export default function App() {
   const [isLabel2Hovered, setLabel2Hovered] = React.useState(false);
   const [isButtonHovered, setButtonHovered] = React.useState(false);
 
+  // Define the base URL for your Vercel-deployed backend
+  const VERCEL_BACKEND_URL = "https://exanalyzer-backend.vercel.app"; // New constant
+
   // Handler for the first file input (Answer Key)
   const handleFileChange1 = (event) => {
     const file = event.target.files[0];
@@ -255,7 +258,7 @@ export default function App() {
       await new Promise((resolve) => setTimeout(resolve, 2500)); // Increased duration
 
       const response = await fetch(
-        "http://127.0.0.1:8000/upload-and-analyze/",
+        `${VERCEL_BACKEND_URL}/upload-and-analyze/`, // <--- UPDATED THIS LINE
         {
           method: "POST",
           body: formData,
@@ -532,8 +535,8 @@ export default function App() {
 
   return (
     <>
-      <style>{` 
-        html, body, #root { margin: 0; padding: 0; width: 100%; height: 100%; font-family: "Inter", sans-serif; background-color: #f8f7ff; } 
+      <style>{`
+        html, body, #root { margin: 0; padding: 0; width: 100%; height: 100%; font-family: "Inter", sans-serif; background-color: #f8f7ff; }
         @keyframes pulse {
           0%, 80%, 100% { transform: scale(0); }
           40% { transform: scale(1.0); }
@@ -742,7 +745,7 @@ export default function App() {
                     <h2 style={{ color: "#312e81", marginTop: 0 }}>Results</h2>
                     <div style={downloadButtonsContainerStyle}>
                       <a
-                        href={`https://exanalyzer-backend.vercel.app/download/${outputFiles.batch}/${outputFiles.excelReport}`}
+                        href={`${VERCEL_BACKEND_URL}/download/${outputFiles.batch}/${outputFiles.excelReport}`} // This is already correct
                         style={downloadButtonStyle}
                         download // This attribute prompts the browser to download the file
                       >
