@@ -94,8 +94,21 @@ def load_correct_answers(filename: str) -> Dict[str, str]:
             reader = csv.reader(answer_file)
             try:
                 first_row = next(reader)
-                if len(first_row) >= 2 and not (len(first_row[1]) > 1 or first_row[1].islower()):
-                    correct_answers[first_row[0]] = first_row[1]
+                # Ensure header row has at least two elements and the second element is not empty or multiple chars (like a sentence)
+                # and not starting with a lowercase letter which might indicate a header row for responses instead of an answer key.
+                if len(first_row) >= 2 and first_row[1]: # Check if first_row[1] is not empty
+                    # Refined check to try and distinguish between an answer key and a response file
+                    # Assumes answer key has question_id, correct_answer
+                    # And correct_answer is typically a single capital letter or number
+                    # This is a heuristic; robust parsing might need more strict rules or user input
+                    if not (len(first_row[1]) > 1 and not first_row[1].isnumeric()): # if more than 1 char, it should be numeric for question ID
+                         correct_answers[first_row[0]] = first_row[1]
+                    elif first_row[1].upper() in ['A', 'B', 'C', 'D', 'E', 'TRUE', 'FALSE', '1', '0']: # Common answer formats
+                        correct_answers[first_row[0]] = first_row[1]
+                    else: # If it looks like a header, skip it and continue parsing if it's not a valid answer
+                        pass # Treat as a header for responses and continue to next row if structure isn't typical answer key.
+                else: # if the first row is malformed for an answer key, assume it's just a header and skip
+                    pass
             except StopIteration:
                 return {} # File is empty
 
@@ -119,7 +132,9 @@ def score_and_sort_responses(response_filename: str, answers_dict: Dict[str, str
 
             all_student_scores = []
             for student_row in reader:
-                if not student_row: continue
+                if not student_row or len(student_row) < len(original_header):
+                    # Skip empty or malformed rows, or rows that don't match the expected column count
+                    continue
                 student_id = student_row[0]
                 new_score_row = [student_id]
                 total_score = 0
@@ -138,12 +153,19 @@ def score_and_sort_responses(response_filename: str, answers_dict: Dict[str, str
                 new_score_row.append(total_score)
                 all_student_scores.append(new_score_row)
 
+        if not all_student_scores:
+            raise ValueError("No valid student response data found after processing.")
+
         all_student_scores.sort(key=lambda row: row[-1], reverse=True)
 
         num_students = len(all_student_scores)
         group_size = math.ceil(num_students * 0.27)
         final_output_data = []
-        if num_students > 5 and (2 * group_size) < num_students:
+
+        # Only apply top/middle/bottom groups if there are enough students to form meaningful groups
+        # Added a check to ensure group_size is at least 1 if num_students > 0
+        # And (2 * group_size) is less than num_students to have a meaningful middle group
+        if num_students >= 5 and group_size >=1 and (2 * group_size) < num_students:
             num_columns = len(original_header) + 1
             top_group = all_student_scores[:group_size]
             middle_group = all_student_scores[group_size:-group_size]
@@ -167,7 +189,7 @@ def score_and_sort_responses(response_filename: str, answers_dict: Dict[str, str
             writer.writerow(original_header + ['Total'])
             writer.writerows(final_output_data)
         return True
-    except (FileNotFoundError, IndexError) as e:
+    except (FileNotFoundError, IndexError, ValueError) as e:
         print(f"Error during scoring: {e}")
         raise HTTPException(status_code=500, detail=f"Error during scoring: {e}")
 
@@ -181,8 +203,10 @@ def perform_item_analysis(scores_filename: str, original_responses_filename: str
 
             all_options = set()
             for row in original_responses:
-                for answer in row[1:]: # Iterate over student answers for each question
-                    all_options.add(answer)
+                # Iterate over student answers for each question, skipping the student_id column
+                # Ensure the row has enough columns before accessing
+                for j in range(1, len(row)):
+                     all_options.add(row[j])
             sorted_options = sorted(list(all_options))
 
 
@@ -196,17 +220,33 @@ def perform_item_analysis(scores_filename: str, original_responses_filename: str
             raise HTTPException(status_code=400, detail="No student data found for item analysis.")
 
         num_students = len(student_data)
+        # Ensure num_students is not zero before proceeding with calculations
+        if num_students == 0:
+            raise ValueError("Cannot perform item analysis with zero students.")
+
         group_size = math.ceil(num_students * 0.27)
         top_group = student_data[:group_size]
         bottom_group = student_data[-group_size:]
         question_headers = header[1:-1]
+
+        # Handle case where there are no questions or student data is malformed
+        if not question_headers:
+            raise ValueError("No question headers found for item analysis.")
+        if len(student_data[0]) <= len(question_headers): # Check if 'Total' column is missing or data is too short
+             raise ValueError("Student score data seems incomplete (missing total scores or question scores).")
+
         all_total_scores = [int(row[-1]) for row in student_data]
         s_t = calculate_std_dev(all_total_scores)
 
         analysis_results = []
         for i, question_id in enumerate(question_headers):
             # --- Difficulty Index ---
-            total_correct = sum(int(row[i + 1]) for row in student_data)
+            # Ensure index i+1 is within bounds for each row
+            try:
+                total_correct = sum(int(row[i + 1]) for row in student_data if len(row) > i + 1)
+            except ValueError:
+                raise ValueError(f"Non-integer value found in score for question {question_id}. Please ensure scores are 0 or 1.")
+
             difficulty_index = total_correct / num_students
             if difficulty_index > 0.80: difficulty_level = "Easy"
             elif difficulty_index >= 0.71: difficulty_level = "Moderately easy"
@@ -215,32 +255,50 @@ def perform_item_analysis(scores_filename: str, original_responses_filename: str
             else: difficulty_level = "Difficult"
 
             # --- Discrimination Index ---
-            top_correct = sum(int(row[i + 1]) for row in top_group)
-            bottom_correct = sum(int(row[i + 1]) for row in bottom_group)
-            discrimination_index = abs((top_correct / group_size) - (bottom_correct / group_size)) if group_size > 0 else 0.0
+            # Ensure group_size is not zero before division
+            top_correct = sum(int(row[i + 1]) for row in top_group if len(row) > i + 1)
+            bottom_correct = sum(int(row[i + 1]) for row in bottom_group if len(row) > i + 1)
+            discrimination_index = 0.0
+            if group_size > 0:
+                discrimination_index = abs((top_correct / group_size) - (bottom_correct / group_size))
             if discrimination_index > 0.39: discrimination_level = "Excellent"
             elif discrimination_index >= 0.30: discrimination_level = "Good"
             elif discrimination_index >= 0.20: discrimination_level = "Regular"
             else: discrimination_level = "Poor"
 
             # --- Point-Biserial Correlation ---
-            scores_correct = [int(row[-1]) for row in student_data if int(row[i+1]) == 1]
-            scores_incorrect = [int(row[-1]) for row in student_data if int(row[i+1]) == 0]
+            scores_correct = [int(row[-1]) for row in student_data if len(row) > i + 1 and int(row[i+1]) == 1]
+            scores_incorrect = [int(row[-1]) for row in student_data if len(row) > i + 1 and int(row[i+1]) == 0]
+            
             m1 = sum(scores_correct) / len(scores_correct) if scores_correct else 0
             m0 = sum(scores_incorrect) / len(scores_incorrect) if scores_incorrect else 0
+            
             p = len(scores_correct) / num_students if num_students > 0 else 0
             q = 1 - p
-            point_biserial = abs(((m1 - m0) / s_t) * math.sqrt(p * q)) if s_t > 0 and p > 0 and q > 0 else 0.0
+            
+            point_biserial = 0.0
+            # Ensure s_t > 0, and p and q are positive (i.e., not all students got it right or all wrong)
+            if s_t > 0 and p > 0 and q > 0:
+                point_biserial = ((m1 - m0) / s_t) * math.sqrt(p * q)
+                # Take absolute value if definition doesn't imply direction for strength
+                # point_biserial = abs(point_biserial) # Keep it signed for proper interpretation, remove abs() if needed
+
             if point_biserial >= 0.40: point_biserial_level = "Very good"
             elif point_biserial >= 0.30: point_biserial_level = "Good"
             elif point_biserial >= 0.20: point_biserial_level = "Acceptable"
             else: point_biserial_level = "Poor"
 
             # --- Distractor Efficiency ---
-            # Ensure we are counting answers from the correct question column in original_responses
             option_counts = Counter(row[i + 1] for row in original_responses if i + 1 < len(row))
-            distractor_counter = sum(1 for opt in sorted_options if (option_counts.get(opt, 0) / num_students) * 100 > 5)
-            distractor_index = (distractor_counter - 1) / distractor_counter if distractor_counter > 1 else 0.0
+            
+            distractor_counter = 0
+            if num_students > 0: # Avoid division by zero if no students
+                distractor_counter = sum(1 for opt in sorted_options if (option_counts.get(opt, 0) / num_students) * 100 > 5)
+            
+            distractor_index = 0.0
+            if distractor_counter > 1: # Needs at least two options (correct + one distractor) to calculate
+                distractor_index = (distractor_counter - 1) / distractor_counter
+            
             if distractor_index >= 0.75: distractor_efficiency = "Excellent"
             elif distractor_index >= 0.66: distractor_efficiency = "Moderate"
             elif distractor_index >= 0.50: distractor_efficiency = "Poor"
@@ -296,14 +354,21 @@ def calculate_excluded_scores(scores_filename: str, output_filename: str) -> boo
 
                 student_id = row[0]
                 try:
+                    # Ensure the row has enough columns for total_score_index
+                    if len(row) <= total_score_index:
+                        raise IndexError(f"Row is too short to contain total score at index {total_score_index}: {row}")
                     total_score = int(row[total_score_index])
-                except (ValueError, IndexError):
-                    raise ValueError(f"Invalid total score or missing column in row: {row}")
+                except (ValueError, IndexError) as e:
+                    raise ValueError(f"Invalid total score or missing column in row: {row}. Error: {e}")
 
                 try:
-                    question_scores = [int(score) for score in row[1:total_score_index]]
-                except (ValueError, IndexError):
-                    raise ValueError(f"Invalid question score or missing column in row: {row}")
+                    # Ensure the slice for question_scores is valid
+                    if total_score_index <= 1: # if only student ID and Total, no questions
+                        question_scores = []
+                    else:
+                        question_scores = [int(score) for score in row[1:total_score_index]]
+                except (ValueError, IndexError) as e:
+                    raise ValueError(f"Invalid question score or missing column in row: {row}. Error: {e}")
 
                 student_excluded_scores_row = [student_id]
 
@@ -335,7 +400,7 @@ def calculate_p_q_values(scores_filename: str, excluded_scores_filename: str, ou
         with open(scores_filename, mode='r', newline='', encoding='utf-8') as scores_file:
             reader = csv.reader(scores_file)
             header = next(reader)
-            question_ids = header[1:-1]
+            question_ids = header[1:-1] # Assuming question_ids are between student_id and Total
 
             all_student_scores_data = []
             for row in reader:
@@ -348,6 +413,12 @@ def calculate_p_q_values(scores_filename: str, excluded_scores_filename: str, ou
             num_students = len(all_student_scores_data)
             num_questions = len(question_ids)
 
+            if num_students == 0:
+                 raise ValueError("Cannot calculate P, Q values and KR-20 with zero students.")
+            if num_questions == 0:
+                 raise ValueError("Cannot calculate P, Q values and KR-20 with zero questions.")
+
+
             all_total_scores = [int(row[-1]) for row in all_student_scores_data]
             total_test_variance = calculate_variance(all_total_scores)
 
@@ -356,76 +427,100 @@ def calculate_p_q_values(scores_filename: str, excluded_scores_filename: str, ou
                 ex_reader = csv.reader(excluded_file)
                 ex_header = next(ex_reader)
 
-                ex_score_col_map = {q_id: ex_header.index(f'Score_Ex_{q_id}') for q_id in question_ids}
+                # Dynamically map excluded score columns
+                ex_score_col_map = {}
+                for q_id in question_ids:
+                    col_name = f'Score_Ex_{q_id}'
+                    if col_name in ex_header:
+                        ex_score_col_map[q_id] = ex_header.index(col_name)
+                    else:
+                        # This scenario indicates a mismatch or error in excluded_scores.csv generation
+                        raise ValueError(f"Excluded score column '{col_name}' not found in {excluded_scores_filename}")
 
                 for row in ex_reader:
                     if row:
                         student_id = row[0]
-                        excluded_scores_per_student_per_item[student_id] = [
-                            float(row[ex_score_col_map[q_id]]) for q_id in question_ids
-                        ]
+                        # Ensure row is long enough to access all required excluded scores
+                        try:
+                            excluded_scores_per_student_per_item[student_id] = [
+                                float(row[ex_score_col_map[q_id]]) for q_id in question_ids
+                            ]
+                        except (IndexError, ValueError) as e:
+                            raise ValueError(f"Error parsing excluded scores for student {student_id}. Row: {row}. Error: {e}")
 
-        p_q_results = []
-        all_p_q_products = []
+            p_q_results = []
+            all_p_q_products = []
 
-        for i, question_id in enumerate(question_ids):
-            correct_answers_for_question = [int(row[i + 1]) for row in all_student_scores_data]
-            num_correct = sum(correct_answers_for_question)
-            p = num_correct / num_students
-            q = 1 - p
-            p_times_q = p * q
-            all_p_q_products.append(p_times_q)
+            for i, question_id in enumerate(question_ids):
+                # Ensure index i+1 is within bounds for all_student_scores_data rows
+                if len(all_student_scores_data[0]) <= i + 1:
+                    raise IndexError(f"Question ID '{question_id}' (index {i+1}) not found in student scores data rows.")
 
-        kr20_total = 0.0
-        sum_of_all_pq = sum(all_p_q_products)
-        if num_questions > 1 and total_test_variance > 0:
-            kr20_total = (num_questions / (num_questions - 1)) * \
-                         (1 - (sum_of_all_pq / total_test_variance))
-        else:
-            kr20_total = float('nan')
+                correct_answers_for_question = [int(row[i + 1]) for row in all_student_scores_data]
+                num_correct = sum(correct_answers_for_question)
+                
+                p = num_correct / num_students # num_students checked above for zero
+                q = 1 - p
+                p_times_q = p * q
+                all_p_q_products.append(p_times_q)
 
-        for i, question_id in enumerate(question_ids):
-            p = sum(int(row[i + 1]) for row in all_student_scores_data) / num_students
-            q = 1 - p
-            p_times_q = p * q
-
-            sum_pq_excluding_current = sum_of_all_pq - all_p_q_products[i]
-
-            current_item_excluded_total_scores = []
-            for student_row in all_student_scores_data:
-                student_id = student_row[0]
-                if student_id in excluded_scores_per_student_per_item:
-                    current_item_excluded_total_scores.append(excluded_scores_per_student_per_item[student_id][i])
-
-            variance_excluded_item = calculate_variance(current_item_excluded_total_scores)
-
-            kr20_variant_for_item = 0.0
-            k_prime = num_questions - 1
-            if k_prime > 1 and variance_excluded_item > 0:
-                kr20_variant_for_item = (k_prime / (k_prime - 1)) * \
-                                        (1 - (sum_pq_excluding_current / variance_excluded_item))
+            kr20_total = 0.0
+            sum_of_all_pq = sum(all_p_q_products)
+            # Ensure num_questions > 1 for KR-20 formula and total_test_variance > 0
+            if num_questions > 1 and total_test_variance > 0:
+                kr20_total = (num_questions / (num_questions - 1)) * \
+                             (1 - (sum_of_all_pq / total_test_variance))
             else:
+                kr20_total = float('nan') # Set to NaN if calculation is not possible/meaningful
+
+            for i, question_id in enumerate(question_ids):
+                p = sum(int(row[i + 1]) for row in all_student_scores_data) / num_students
+                q = 1 - p
+                p_times_q = p * q
+
+                # Handle case if all_p_q_products is empty or index is out of bounds
+                sum_pq_excluding_current = sum_of_all_pq - (all_p_q_products[i] if i < len(all_p_q_products) else 0)
+
+                current_item_excluded_total_scores = []
+                for student_row in all_student_scores_data:
+                    student_id = student_row[0]
+                    if student_id in excluded_scores_per_student_per_item and i < len(excluded_scores_per_student_per_item[student_id]):
+                        current_item_excluded_total_scores.append(excluded_scores_per_student_per_item[student_id][i])
+                    else:
+                        # Log or raise error if expected excluded score is missing
+                        print(f"Warning: Excluded score for student {student_id} and question {question_id} not found or index out of bounds.")
+
+
+                variance_excluded_item = calculate_variance(current_item_excluded_total_scores)
+
                 kr20_variant_for_item = float('nan')
+                k_prime = num_questions - 1
+                # Ensure k_prime > 0 (i.e., num_questions > 1) and variance_excluded_item > 0
+                if k_prime > 0 and variance_excluded_item > 0: # Changed k_prime > 1 to k_prime > 0 to allow for 2 questions
+                    kr20_variant_for_item = (k_prime / (k_prime - 1)) * \
+                                            (1 - (sum_pq_excluding_current / variance_excluded_item))
+                else: # Set to NaN if calculation is not possible/meaningful
+                    pass # Already initialized to nan
 
-            p_q_results.append([
-                question_id,
-                f"{p:.4f}",
-                f"{q:.4f}",
-                f"{p_times_q:.4f}",
-                f"{variance_excluded_item:.4f}",
-                f"{kr20_variant_for_item:.4f}"
-            ])
+                p_q_results.append([
+                    question_id,
+                    f"{p:.4f}",
+                    f"{q:.4f}",
+                    f"{p_times_q:.4f}",
+                    f"{variance_excluded_item:.4f}",
+                    f"{kr20_variant_for_item:.4f}"
+                ])
 
-        with open(output_filename, mode='w', newline='', encoding='utf-8') as output_file:
-            writer = csv.writer(output_file)
-            writer.writerow([
-                'Question_ID', 'p (Percent Correct)', 'q (Percent Wrong)', 'p*q',
-                'Variance_Score_Ex_Item', 'KR20_Variant_For_Item'
-            ])
-            writer.writerows(p_q_results)
+            with open(output_filename, mode='w', newline='', encoding='utf-8') as output_file:
+                writer = csv.writer(output_file)
+                writer.writerow([
+                    'Question_ID', 'p (Percent Correct)', 'q (Percent Wrong)', 'p*q',
+                    'Variance_Score_Ex_Item', 'KR20_Variant_For_Item'
+                ])
+                writer.writerows(p_q_results)
 
-            writer.writerow([])
-            writer.writerow(['Overall Test KR-20', f"{kr20_total:.4f}"])
+                writer.writerow([])
+                writer.writerow(['Overall Test KR-20', f"{kr20_total:.4f}"])
 
     except (FileNotFoundError, ValueError, IndexError) as e:
         print(f"Error during P, Q, and Variance calculation: {e}")
@@ -445,26 +540,30 @@ def run_full_analysis_pipeline(
     try:
         correct_answers_map = load_correct_answers(str(answer_key_path))
         if not correct_answers_map:
-            raise ValueError(f"Could not load or parse answer key: {answer_key_path}")
+            raise ValueError(f"Could not load or parse answer key: {answer_key_path}. It might be empty or malformed.")
 
-        if score_and_sort_responses(str(responses_path), correct_answers_map, str(scores_output_path)):
-            calculate_excluded_scores(str(scores_output_path), str(excluded_scores_path))
-            perform_item_analysis(str(scores_output_path), str(responses_path), str(analysis_output_path))
-            calculate_p_q_values(str(scores_output_path), str(excluded_scores_path), str(p_q_output_path))
+        # Ensure that `score_and_sort_responses` indicates success before proceeding
+        if not score_and_sort_responses(str(responses_path), correct_answers_map, str(scores_output_path)):
+             raise RuntimeError("Scoring and sorting responses failed unexpectedly.")
 
-            # Combine all CSVs into a single Excel file
-            with pd.ExcelWriter(excel_output_path, engine='openpyxl') as writer:
-                scores_df = pd.read_csv(scores_output_path)
-                scores_df.to_excel(writer, sheet_name='Student Scores', index=False)
+        # Pass paths as strings to pandas.read_csv as it expects string or buffer
+        calculate_excluded_scores(str(scores_output_path), str(excluded_scores_path))
+        perform_item_analysis(str(scores_output_path), str(responses_path), str(analysis_output_path))
+        calculate_p_q_values(str(scores_output_path), str(excluded_scores_path), str(p_q_output_path))
 
-                analysis_df = pd.read_csv(analysis_output_path)
-                analysis_df.to_excel(writer, sheet_name='Item Analysis', index=False)
+        # Combine all CSVs into a single Excel file
+        with pd.ExcelWriter(excel_output_path, engine='openpyxl') as writer:
+            scores_df = pd.read_csv(scores_output_path)
+            scores_df.to_excel(writer, sheet_name='Student Scores', index=False)
 
-                p_q_df = pd.read_csv(p_q_output_path)
-                p_q_df.to_excel(writer, sheet_name='P-Q Values & KR20', index=False)
+            analysis_df = pd.read_csv(analysis_output_path)
+            analysis_df.to_excel(writer, sheet_name='Item Analysis', index=False)
 
-                excluded_df = pd.read_csv(excluded_scores_path)
-                excluded_df.to_excel(writer, sheet_name='Excluded Scores (KR)', index=False)
+            p_q_df = pd.read_csv(p_q_output_path)
+            p_q_df.to_excel(writer, sheet_name='P-Q Values & KR20', index=False)
+
+            excluded_df = pd.read_csv(excluded_scores_path)
+            excluded_df.to_excel(writer, sheet_name='Excluded Scores (KR)', index=False)
 
     except Exception as e:
         # Clean up created files if an error occurs during processing
@@ -496,11 +595,13 @@ async def create_upload_and_process_files(
     final_excel_output_path = batch_path / "item_analysis_report.xlsx" # The Excel file
 
     try:
+        # Write files to disk
         with open(answer_key_path, "wb") as buffer:
             shutil.copyfileobj(answer_key.file, buffer)
         with open(responses_path, "wb") as buffer:
             shutil.copyfileobj(student_responses.file, buffer)
 
+        # Run the heavy analysis in a threadpool to not block the event loop
         await run_in_threadpool(
             run_full_analysis_pipeline,
             answer_key_path=answer_key_path,
@@ -517,11 +618,17 @@ async def create_upload_and_process_files(
             "batch_directory": str(batch_path),
             "output_file": str(final_excel_output_path) # Return the path to the Excel file
         }
-    except Exception as e:
-        # Clean up the batch directory if an error occurred during processing
+    except HTTPException as http_exc:
+        # Re-raise FastAPI HTTPExceptions directly
         if batch_path.exists():
             shutil.rmtree(batch_path)
-        raise HTTPException(status_code=500, detail=f"An error occurred during analysis: {str(e)}")
+        raise http_exc
+    except Exception as e:
+        # Catch any other unexpected errors and return a 500
+        if batch_path.exists():
+            shutil.rmtree(batch_path)
+        print(f"Unhandled error in /upload-and-analyze/: {e}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred during analysis: {str(e)}")
 
 
 @app.get("/download/{batch_name}/{file_name}")
