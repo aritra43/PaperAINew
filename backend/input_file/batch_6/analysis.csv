@@ -1,0 +1,51 @@
+Item_Identifier,Difficulty_Index,Discrimination_Index,Point_Biserial_Correlation,Count_Option_A,Count_Option_B,Count_Option_C,Count_Option_D,Distractor_Index,Difficulty_Level,Discrimination_Level,Point_Biserial_Level,Distractor_Efficiency
+Q1,0.42,0.07,0.09,25,42,1,32,0.67,Moderately difficult,Poor,Poor,Moderate
+Q2,0.24,0.07,0.08,24,21,24,31,0.75,Difficult,Poor,Poor,Excellent
+Q3,0.24,0.04,0.01,28,24,24,24,0.75,Difficult,Poor,Poor,Excellent
+Q4,0.28,0.15,0.03,25,21,26,28,0.75,Difficult,Poor,Poor,Excellent
+Q5,0.26,0.07,0.15,26,29,23,22,0.75,Difficult,Poor,Poor,Excellent
+Q6,0.19,0.26,0.24,30,24,19,27,0.75,Difficult,Regular,Acceptable,Excellent
+Q7,0.30,0.11,0.11,15,30,22,33,0.75,Difficult,Poor,Poor,Excellent
+Q8,0.22,0.07,0.11,30,23,25,22,0.75,Difficult,Poor,Poor,Excellent
+Q9,0.22,0.26,0.19,31,23,22,24,0.75,Difficult,Regular,Poor,Excellent
+Q10,0.20,0.11,0.12,25,20,27,28,0.75,Difficult,Poor,Poor,Excellent
+Q11,0.30,0.19,0.15,30,26,25,19,0.75,Difficult,Poor,Poor,Excellent
+Q12,0.33,0.30,0.22,33,22,20,25,0.75,Moderately difficult,Regular,Acceptable,Excellent
+Q13,0.24,0.00,0.08,23,24,30,23,0.75,Difficult,Poor,Poor,Excellent
+Q14,0.18,0.19,0.24,23,18,31,28,0.75,Difficult,Poor,Acceptable,Excellent
+Q15,0.30,0.22,0.23,30,17,27,26,0.75,Difficult,Regular,Acceptable,Excellent
+Q16,0.27,0.22,0.25,22,22,27,29,0.75,Difficult,Regular,Acceptable,Excellent
+Q17,0.23,0.07,0.09,25,31,21,23,0.75,Difficult,Poor,Poor,Excellent
+Q18,0.25,0.26,0.23,24,25,26,25,0.75,Difficult,Regular,Acceptable,Excellent
+Q19,0.27,0.04,0.04,27,28,29,16,0.75,Difficult,Poor,Poor,Excellent
+Q20,0.25,0.22,0.21,31,25,23,21,0.75,Difficult,Regular,Acceptable,Excellent
+Q21,0.24,0.15,0.14,23,24,23,30,0.75,Difficult,Poor,Poor,Excellent
+Q22,0.30,0.26,0.27,30,26,24,20,0.75,Difficult,Regular,Acceptable,Excellent
+Q23,0.40,0.26,0.14,13,22,25,40,0.75,Moderately difficult,Regular,Poor,Excellent
+Q24,0.24,0.15,0.17,29,24,24,23,0.75,Difficult,Poor,Poor,Excellent
+Q25,0.24,0.07,0.14,22,30,24,24,0.75,Difficult,Poor,Poor,Excellent
+Q26,0.23,0.04,0.04,29,23,24,24,0.75,Difficult,Poor,Poor,Excellent
+Q27,0.25,0.11,0.17,26,25,25,24,0.75,Difficult,Poor,Poor,Excellent
+Q28,0.25,0.22,0.17,31,20,24,25,0.75,Difficult,Regular,Poor,Excellent
+Q29,0.29,0.30,0.22,18,30,23,29,0.75,Difficult,Regular,Acceptable,Excellent
+Q30,0.24,0.22,0.25,24,29,23,24,0.75,Difficult,Regular,Acceptable,Excellent
+Q31,0.21,0.26,0.22,21,35,18,26,0.75,Difficult,Regular,Acceptable,Excellent
+Q32,0.21,0.11,0.11,30,19,21,30,0.75,Difficult,Poor,Poor,Excellent
+Q33,0.31,0.07,0.13,25,16,31,28,0.75,Moderately difficult,Poor,Poor,Excellent
+Q34,0.26,0.15,0.17,26,27,18,29,0.75,Difficult,Poor,Poor,Excellent
+Q35,0.26,0.15,0.17,23,23,28,26,0.75,Difficult,Poor,Poor,Excellent
+Q36,0.24,0.19,0.16,24,22,30,24,0.75,Difficult,Poor,Poor,Excellent
+Q37,0.25,0.26,0.20,30,25,28,17,0.75,Difficult,Regular,Acceptable,Excellent
+Q38,0.27,0.30,0.24,22,27,33,18,0.75,Difficult,Regular,Acceptable,Excellent
+Q39,0.29,0.15,0.13,25,29,20,26,0.75,Difficult,Poor,Poor,Excellent
+Q40,0.25,0.22,0.29,23,28,24,25,0.75,Difficult,Regular,Acceptable,Excellent
+Q41,0.22,0.11,0.04,20,22,31,27,0.75,Difficult,Poor,Poor,Excellent
+Q42,0.26,0.15,0.15,26,32,22,20,0.75,Difficult,Poor,Poor,Excellent
+Q43,0.25,0.30,0.22,28,25,25,22,0.75,Difficult,Regular,Acceptable,Excellent
+Q44,0.26,0.00,0.01,30,26,27,17,0.75,Difficult,Poor,Poor,Excellent
+Q45,0.23,0.19,0.07,19,23,25,33,0.75,Difficult,Poor,Poor,Excellent
+Q46,0.29,0.26,0.21,18,27,26,29,0.75,Difficult,Regular,Acceptable,Excellent
+Q47,0.26,0.04,0.12,31,26,23,20,0.75,Difficult,Poor,Poor,Excellent
+Q48,0.17,0.04,0.04,26,32,25,17,0.75,Difficult,Poor,Poor,Excellent
+Q49,0.12,0.07,0.12,34,32,12,22,0.75,Difficult,Poor,Poor,Excellent
+Q50,0.22,0.07,0.08,22,29,23,26,0.75,Difficult,Poor,Poor,Excellent
