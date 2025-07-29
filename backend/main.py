@@ -24,7 +24,7 @@ origins = [
     "http://localhost",
     "http://localhost:3000", # Default React dev server port
     "http://localhost:5173", # Default Vite dev server port
-    "https://exanalyzer.vercel.app/"
+    "https://exanalyzer.vercel.app"
 ]
 
 app.add_middleware(
